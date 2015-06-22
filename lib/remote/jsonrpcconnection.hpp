@@ -42,12 +42,12 @@ struct MessageOrigin;
  *
  * @ingroup remote
  */
-class I2_REMOTE_API ApiClient : public Object
+class I2_REMOTE_API JsonRpcConnection : public Object
 {
 public:
-	DECLARE_PTR_TYPEDEFS(ApiClient);
+	DECLARE_PTR_TYPEDEFS(JsonRpcConnection);
 
-	ApiClient(const String& identity, bool authenticated, const TlsStream::Ptr& stream, ConnectionRole role);
+	JsonRpcConnection(const String& identity, bool authenticated, const TlsStream::Ptr& stream, ConnectionRole role);
 
 	void Start(void);
 

@@ -19,7 +19,7 @@
 
 #include "remote/apilistener.hpp"
 #include "remote/apilistener.tcpp"
-#include "remote/apiclient.hpp"
+#include "remote/jsonrpcconnection.hpp"
 #include "remote/endpoint.hpp"
 #include "remote/jsonrpc.hpp"
 #include "base/convert.hpp"
@@ -239,7 +239,7 @@ void ApiListener::AddConnection(const Endpoint::Ptr& endpoint)
 	String host = endpoint->GetHost();
 	String port = endpoint->GetPort();
 
-	Log(LogInformation, "ApiClient")
+	Log(LogInformation, "JsonRpcConnection")
 	    << "Reconnecting to API endpoint '" << endpoint->GetName() << "' via host '" << host << "' and port '" << port << "'";
 
 	TcpSocket::Ptr client = new TcpSocket();
@@ -315,7 +315,7 @@ void ApiListener::NewClientHandler(const Socket::Ptr& client, const String& host
 	if (endpoint)
 		need_sync = !endpoint->IsConnected();
 
-	ApiClient::Ptr aclient = new ApiClient(identity, verify_ok, tlsStream, role);
+	JsonRpcConnection::Ptr aclient = new JsonRpcConnection(identity, verify_ok, tlsStream, role);
 	aclient->Start();
 
 	if (endpoint) {
@@ -429,7 +429,7 @@ void ApiListener::ApiTimerHandler(void)
 		lmessage->Set("method", "log::SetLogPosition");
 		lmessage->Set("params", lparams);
 
-		BOOST_FOREACH(const ApiClient::Ptr& client, endpoint->GetClients())
+		BOOST_FOREACH(const JsonRpcConnection::Ptr& client, endpoint->GetClients())
 			client->SendMessage(lmessage);
 
 		Log(LogNotice, "ApiListener")
@@ -495,7 +495,7 @@ void ApiListener::SyncSendMessage(const Endpoint::Ptr& endpoint, const Dictionar
 		Log(LogNotice, "ApiListener")
 		    << "Sending message to '" << endpoint->GetName() << "'";
 
-		BOOST_FOREACH(const ApiClient::Ptr& client, endpoint->GetClients())
+		BOOST_FOREACH(const JsonRpcConnection::Ptr& client, endpoint->GetClients())
 			client->SendMessage(message);
 	}
 }
@@ -635,7 +635,7 @@ void ApiListener::LogGlobHandler(std::vector<int>& files, const String& file)
 	files.push_back(ts);
 }
 
-void ApiListener::ReplayLog(const ApiClient::Ptr& client)
+void ApiListener::ReplayLog(const JsonRpcConnection::Ptr& client)
 {
 	Endpoint::Ptr endpoint = client->GetEndpoint();
 
@@ -823,19 +823,19 @@ std::pair<Dictionary::Ptr, Dictionary::Ptr> ApiListener::GetStatus(void)
 	return std::make_pair(status, perfdata);
 }
 
-void ApiListener::AddAnonymousClient(const ApiClient::Ptr& aclient)
+void ApiListener::AddAnonymousClient(const JsonRpcConnection::Ptr& aclient)
 {
 	ObjectLock olock(this);
 	m_AnonymousClients.insert(aclient);
 }
 
-void ApiListener::RemoveAnonymousClient(const ApiClient::Ptr& aclient)
+void ApiListener::RemoveAnonymousClient(const JsonRpcConnection::Ptr& aclient)
 {
 	ObjectLock olock(this);
 	m_AnonymousClients.erase(aclient);
 }
 
-std::set<ApiClient::Ptr> ApiListener::GetAnonymousClients(void) const
+std::set<JsonRpcConnection::Ptr> ApiListener::GetAnonymousClients(void) const
 {
 	ObjectLock olock(this);
 	return m_AnonymousClients;
