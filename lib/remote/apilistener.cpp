@@ -284,56 +284,86 @@ void ApiListener::NewClientHandler(const Socket::Ptr& client, const String& host
 
 	try {
 		tlsStream->Handshake();
-	} catch (const std::exception&) {
-		Log(LogCritical, "ApiListener", "Client TLS handshake failed.");
+	} catch (const std::exception& ex) {
+		Log(LogCritical, "ApiListener")
+		    << "Client TLS handshake failed: " << DiagnosticInformation(ex);
 		return;
 	}
 
 	boost::shared_ptr<X509> cert = tlsStream->GetPeerCertificate();
 	String identity;
-
-	try {
-		identity = GetCertificateCN(cert);
-	} catch (const std::exception&) {
-		Log(LogCritical, "ApiListener")
-		    << "Cannot get certificate common name from cert path: '" << GetCertPath() << "'.";
-		return;
-	}
-
-	bool verify_ok = tlsStream->IsVerifyOK();
-
-	Log(LogInformation, "ApiListener")
-	    << "New client connection for identity '" << identity << "'" << (verify_ok ? "" : " (unauthenticated)");
-
 	Endpoint::Ptr endpoint;
+	bool verify_ok = false;
 
-	if (verify_ok)
-		endpoint = Endpoint::GetByName(identity);
+	if (cert) {
+		try {
+			identity = GetCertificateCN(cert);
+		} catch (const std::exception&) {
+			Log(LogCritical, "ApiListener")
+			    << "Cannot get certificate common name from cert path: '" << GetCertPath() << "'.";
+			return;
+		}
+
+		verify_ok = tlsStream->IsVerifyOK();
+
+		Log(LogInformation, "ApiListener")
+		    << "New client connection for identity '" << identity << "'" << (verify_ok ? "" : " (unauthenticated)");
+
+
+		if (verify_ok)
+			endpoint = Endpoint::GetByName(identity);
+	} else {
+		Log(LogInformation, "ApiListener")
+		    << "New client connection (no client certificate)";
+	}
 
 	bool need_sync = false;
 
 	if (endpoint)
 		need_sync = !endpoint->IsConnected();
 
-	JsonRpcConnection::Ptr aclient = new JsonRpcConnection(identity, verify_ok, tlsStream, role);
-	aclient->Start();
+	ClientType ctype;
 
-	if (endpoint) {
-		endpoint->AddClient(aclient);
+	if (role == RoleClient) {
+		Dictionary::Ptr message = new Dictionary();
+		message->Set("jsonrpc", "2.0");
+		message->Set("method", "icinga::Hello");
+		message->Set("params", new Dictionary());
+		JsonRpc::SendMessage(tlsStream, message);
+		ctype = ClientJsonRpc;
+	} else {
+		char firstByte;
+		tlsStream->Peek(&firstByte, 1, false);
 
-		if (need_sync) {
-			{
-				ObjectLock olock(endpoint);
+		if (firstByte >= '0' && firstByte <= '9')
+			ctype = ClientJsonRpc;
+		else
+			ctype = ClientHttp;
+	}
 
-				endpoint->SetSyncing(true);
+	if (ctype == ClientJsonRpc) {
+		JsonRpcConnection::Ptr aclient = new JsonRpcConnection(identity, verify_ok, tlsStream, role);
+		aclient->Start();
+
+		if (endpoint) {
+			endpoint->AddClient(aclient);
+
+			if (need_sync) {
+				{
+					ObjectLock olock(endpoint);
+
+					endpoint->SetSyncing(true);
+				}
+
+				ReplayLog(aclient);
 			}
 
-			ReplayLog(aclient);
-		}
-
-		SendConfigUpdate(aclient);
-	} else
-		AddAnonymousClient(aclient);
+			SendConfigUpdate(aclient);
+		} else
+			AddAnonymousClient(aclient);
+	} else {
+		Log(LogWarning, "ApiListener", "TODO: Handle HTTP client");
+	}
 }
 
 void ApiListener::ApiTimerHandler(void)

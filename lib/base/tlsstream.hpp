@@ -58,6 +58,7 @@ public:
 
 	virtual void Close(void);
 
+	virtual size_t Peek(void *buffer, size_t count, bool allow_partial = false);
 	virtual size_t Read(void *buffer, size_t count, bool allow_partial = false);
 	virtual void Write(const void *buffer, size_t count);
 

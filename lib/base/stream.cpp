@@ -40,6 +40,11 @@ bool Stream::IsDataAvailable(void) const
 	return false;
 }
 
+size_t Stream::Peek(void *buffer, size_t count, bool allow_partial)
+{
+	BOOST_THROW_EXCEPTION(std::runtime_error("Stream does not support Peek()."));
+}
+
 void Stream::SignalDataAvailable(void)
 {
 	OnDataAvailable();

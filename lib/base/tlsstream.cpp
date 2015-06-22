@@ -65,7 +65,7 @@ TlsStream::TlsStream(const Socket::Ptr& socket, const String& hostname, Connecti
 
 	SSL_set_ex_data(m_SSL.get(), m_SSLIndex, this);
 
-	SSL_set_verify(m_SSL.get(), SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, &TlsStream::ValidateCertificate);
+	SSL_set_verify(m_SSL.get(), SSL_VERIFY_PEER | SSL_VERIFY_CLIENT_ONCE, &TlsStream::ValidateCertificate);
 
 	socket->MakeNonBlocking();
 
@@ -160,7 +160,7 @@ void TlsStream::OnEvent(int revents)
 
 			break;
 		case TlsActionWrite:
-			count = m_SendQ->Peek(buffer, sizeof(buffer));
+			count = m_SendQ->Peek(buffer, sizeof(buffer), true);
 
 			rc = SSL_write(m_SSL.get(), buffer, count);
 
@@ -263,6 +263,19 @@ void TlsStream::Handshake(void)
 /**
  * Processes data for the stream.
  */
+size_t TlsStream::Peek(void *buffer, size_t count, bool allow_partial)
+{
+	boost::mutex::scoped_lock lock(m_Mutex);
+
+	if (!allow_partial)
+		while (m_RecvQ->GetAvailableBytes() < count && !m_ErrorOccurred && !m_Eof)
+			m_CV.wait(lock);
+
+	HandleError();
+
+	return m_RecvQ->Peek(buffer, count, true);
+}
+
 size_t TlsStream::Read(void *buffer, size_t count, bool allow_partial)
 {
 	boost::mutex::scoped_lock lock(m_Mutex);

@@ -35,6 +35,12 @@ enum ClientRole
 	ClientOutbound
 };
 
+enum ClientType
+{
+	ClientJsonRpc,
+	ClientHttp
+};
+
 struct MessageOrigin;
 
 /**
